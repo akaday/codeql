@@ -8,6 +8,7 @@ private import semmle.javascript.security.dataflow.CodeInjectionCustomizations
 private import semmle.javascript.security.dataflow.ClientSideUrlRedirectCustomizations
 private import semmle.javascript.DynamicPropertyAccess
 private import semmle.javascript.dataflow.internal.PreCallGraphStep
+private import semmle.javascript.ViewComponentInput
 
 /**
  * Provides classes for working with Angular (also known as Angular 2.x) applications.
@@ -553,5 +554,39 @@ module Angular2 {
     DomValueSources() {
       this = API::Node::ofType("@angular/core", "ElementRef").getMember("nativeElement").asSource()
     }
+  }
+
+  /**
+   * A source of DOM events originating from the `$event` variable in an event handler installed in an Angular template.
+   */
+  private class DomEventSources extends DOM::DomEventSource::Range {
+    DomEventSources() {
+      exists(HTML::Element elm, string attributeName |
+        elm = any(ComponentClass cls).getATemplateElement() and
+        // Ignore instantiations of known element (mainly focus on native DOM elements)
+        not elm = any(ComponentClass cls).getATemplateInstantiation() and
+        not elm.getName().matches("ng-%") and
+        this =
+          elm.getAttributeByName(attributeName)
+              .getCodeInAttribute()
+              .(TemplateTopLevel)
+              .getAVariableUse("$event") and
+        attributeName.matches("(%)") and // event handler attribute
+        not attributeName.matches("(ng%)") // exclude NG events which aren't necessarily DOM events
+      )
+    }
+  }
+
+  private class InputFieldAsViewComponentInput extends ViewComponentInput {
+    InputFieldAsViewComponentInput() {
+      this =
+        API::moduleImport("@angular/core")
+            .getMember("Input")
+            .getReturn()
+            .getADecoratedMember()
+            .asSource()
+    }
+
+    override string getSourceType() { result = "Angular component input field" }
   }
 }

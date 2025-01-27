@@ -44,7 +44,11 @@ module RustTaintTracking implements InputSig<Location, RustDataFlow> {
       // source is a collection.
       exists(SingletonContentSet cs |
         RustDataFlow::readStep(pred, cs, succ) and
-        cs.getContent() instanceof ArrayElementContent
+        cs.getContent() instanceof ElementContent
+      )
+      or
+      exists(FormatArgsExprCfgNode format | succ.asExpr() = format |
+        pred.asExpr() = [format.getArgumentExpr(_), format.getFormatTemplateVariableAccess(_)]
       )
     )
     or
@@ -59,7 +63,10 @@ module RustTaintTracking implements InputSig<Location, RustDataFlow> {
   bindingset[node]
   predicate defaultImplicitTaintRead(Node::Node node, ContentSet cs) {
     exists(node) and
-    cs.(SingletonContentSet).getContent() instanceof ArrayElementContent
+    exists(Content c | c = cs.(SingletonContentSet).getContent() |
+      c instanceof ElementContent or
+      c instanceof ReferenceContent
+    )
   }
 
   /**

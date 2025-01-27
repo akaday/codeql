@@ -100,7 +100,7 @@ fn tuple_match() {
     let a = (2, source(38), 2);
     let (a0, a1, a2) = a;
     sink(a0);
-    sink(a1); // $ MISSING: hasValueFlow=38
+    sink(a1); // $ hasValueFlow=38
     sink(a2);
 }
 
@@ -223,6 +223,14 @@ fn option_pattern_match_unqualified() {
 fn option_unwrap() {
     let s1 = Some(source(19));
     sink(s1.unwrap()); // $ hasValueFlow=19
+}
+
+fn option_unwrap_or() {
+    let s1 = Some(source(46));
+    sink(s1.unwrap_or(0)); // $ hasValueFlow=46
+
+    let s2 = Some(0);
+    sink(s2.unwrap_or(source(47))); // $ hasValueFlow=47
 }
 
 fn option_questionmark() -> Option<i64> {
@@ -379,32 +387,28 @@ fn array_assignment() {
     sink(mut_arr[0]); // $ SPURIOUS: hasValueFlow=55
 }
 
-fn closure_flow_out() {
-    let f = |cond| if cond { source(92) } else { 0 };
-    sink(f(true)); // $ hasValueFlow=92
+// Test data flow inconsistency occuring with captured variables and `continue`
+// in a loop.
+pub fn captured_variable_and_continue(names: Vec<(bool, Option<String>)>) {
+  let default_name = source(83).to_string();
+  for (cond, name) in names {
+    if cond {
+      let n = name.unwrap_or_else(|| default_name.to_string());
+      sink(n.len() as i64);
+      continue;
+    }
+  }
 }
 
-fn closure_flow_in() {
-    let f = |cond, data|
-        if cond {
-            sink(data); // $ hasValueFlow=87
-        } else {
-            sink(0)
-        };
-    let a = source(87);
-    f(true, a);
+macro_rules! get_source {
+    ($e:expr) => {
+        source($e)
+    };
 }
 
-fn closure_flow_through() {
-    let f = |cond, data|
-        if cond {
-            data
-        } else {
-            0
-        };
-    let a = source(43);
-    let b = f(true, a);
-    sink(b); // $ hasValueFlow=43
+fn macro_invocation() {
+    let s = get_source!(37);
+    sink(s); // $ hasValueFlow=37
 }
 
 fn main() {
@@ -427,6 +431,7 @@ fn main() {
     option_pattern_match_qualified();
     option_pattern_match_unqualified();
     option_unwrap();
+    option_unwrap_or();
     option_questionmark();
     let _ = result_questionmark();
     custom_tuple_enum_pattern_match_qualified();
@@ -440,7 +445,6 @@ fn main() {
     array_for_loop();
     array_slice_pattern();
     array_assignment();
-    closure_flow_out();
-    closure_flow_in();
-    closure_flow_through();
+    captured_variable_and_continue(vec![]);
+    macro_invocation();
 }

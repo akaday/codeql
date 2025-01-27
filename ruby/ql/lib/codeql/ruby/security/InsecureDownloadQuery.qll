@@ -20,6 +20,14 @@ private module InsecureDownloadConfig implements DataFlow::StateConfigSig {
   predicate isSink(DataFlow::Node sink, FlowState label) { sink.(Sink).getAFlowLabel() = label }
 
   predicate isBarrier(DataFlow::Node node) { node instanceof Sanitizer }
+
+  predicate observeDiffInformedIncrementalMode() { any() }
+
+  Location getASelectedSinkLocation(DataFlow::Node sink) {
+    result = sink.(Sink).getLocation()
+    or
+    result = sink.(Sink).getDownloadCall().getLocation()
+  }
 }
 
 /**

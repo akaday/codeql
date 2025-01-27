@@ -1067,13 +1067,13 @@ class _:
     """
 
 
-@annotate(FormatArgsArg)
+@annotate(FormatArgsArg, cfg = True)
 @qltest.test_with(FormatArgsExpr)
 class _:
     """
-    A FormatArgsArg. For example:
+    A FormatArgsArg. For example the `"world"` in:
     ```rust
-    todo!()
+    format_args!("Hello, {}!", "world")
     ```
     """
 
@@ -1546,12 +1546,18 @@ class _:
 
 
 @annotate(SelfParam, replace_bases={AstNode: ParamBase}, cfg = True)
+@rust.doc_test_signature(None)
 class _:
     """
     A `self` parameter. For example `self` in:
     ```rust
-    fn push(&mut self, value: T) {
-      // ...
+    struct X;
+    impl X {
+      fn one(&self) {}
+      fn two(&mut self) {}
+      fn three(self) {}
+      fn four(mut self) {}
+      fn five<'a>(&'a self) {}
     }
     ```
     """
@@ -1865,10 +1871,37 @@ class Format(Locatable):
     ```rust
     println!("Hello {}", "world");
     ```
+    or the `{value:#width$.precision$}` in:
+    ```rust
+    println!("Value {value:#width$.precision$}");
+    ```
     """
     parent: FormatArgsExpr
     index: int
-    argument: optional["FormatArgument"] | child
+    argument_ref: optional["FormatArgument"] | child | desc("""
+        For example `name` and `0` in:
+        ```rust
+        let name = "Alice";
+        println!("{name} in wonderland");
+        println!("{0} in wonderland", name);
+        ```
+    """)
+    width_argument: optional["FormatArgument"] | child | desc("""
+        For example `width` and `1` in:
+        ```rust
+        let width = 6;
+        println!("{:width$}", PI);
+        println!("{:1$}", PI, width);
+        ```
+    """)
+    precision_argument: optional["FormatArgument"] | child | desc("""
+        For example `prec` and `1` in:
+        ```rust
+        let prec = 6;
+        println!("{:.prec$}", PI);
+        println!("{:.1$}", PI, prec);
+        ```
+    """)
 
 
 @synth.on_arguments(parent=FormatArgsExpr, index=int, kind=int, name=string, positional=boolean, offset=int)

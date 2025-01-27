@@ -190,7 +190,7 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
       override predicate relevantChild(AstNode child) {
         none()
         or
-        child = this.getExpr()
+        child = this.getTemplate(_)
       }
     }
 
@@ -211,6 +211,21 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
       AsmExpr getAsmExpr() { result = node }
 
       /**
+       * Gets the `index`th asm piece of this asm expression (0-based).
+       */
+      AsmPiece getAsmPiece(int index) { result = node.getAsmPiece(index) }
+
+      /**
+       * Gets any of the asm pieces of this asm expression.
+       */
+      AsmPiece getAnAsmPiece() { result = this.getAsmPiece(_) }
+
+      /**
+       * Gets the number of asm pieces of this asm expression.
+       */
+      int getNumberOfAsmPieces() { result = count(int i | exists(this.getAsmPiece(i))) }
+
+      /**
        * Gets the `index`th attr of this asm expression (0-based).
        */
       Attr getAttr(int index) { result = node.getAttr(index) }
@@ -226,16 +241,21 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
       int getNumberOfAttrs() { result = count(int i | exists(this.getAttr(i))) }
 
       /**
-       * Gets the expression of this asm expression, if it exists.
+       * Gets the `index`th template of this asm expression (0-based).
        */
-      ExprCfgNode getExpr() {
-        any(ChildMapping mapping).hasCfgChild(node, node.getExpr(), this, result)
+      ExprCfgNode getTemplate(int index) {
+        any(ChildMapping mapping).hasCfgChild(node, node.getTemplate(index), this, result)
       }
 
       /**
-       * Holds if `getExpr()` exists.
+       * Gets any of the templates of this asm expression.
        */
-      predicate hasExpr() { exists(this.getExpr()) }
+      ExprCfgNode getATemplate() { result = this.getTemplate(_) }
+
+      /**
+       * Gets the number of templates of this asm expression.
+       */
+      int getNumberOfTemplates() { result = count(int i | exists(this.getTemplate(i))) }
     }
 
     final private class ParentAwaitExpr extends ParentAstNode, AwaitExpr {
@@ -1001,9 +1021,56 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
       predicate hasPat() { exists(this.getPat()) }
     }
 
+    final private class ParentFormatArgsArg extends ParentAstNode, FormatArgsArg {
+      override predicate relevantChild(AstNode child) {
+        none()
+        or
+        child = this.getExpr()
+      }
+    }
+
+    /**
+     * A FormatArgsArg. For example the `"world"` in:
+     * ```rust
+     * format_args!("Hello, {}!", "world")
+     * ```
+     */
+    final class FormatArgsArgCfgNode extends CfgNodeFinal {
+      private FormatArgsArg node;
+
+      FormatArgsArgCfgNode() { node = this.getAstNode() }
+
+      /** Gets the underlying `FormatArgsArg`. */
+      FormatArgsArg getFormatArgsArg() { result = node }
+
+      /**
+       * Gets the expression of this format arguments argument, if it exists.
+       */
+      ExprCfgNode getExpr() {
+        any(ChildMapping mapping).hasCfgChild(node, node.getExpr(), this, result)
+      }
+
+      /**
+       * Holds if `getExpr()` exists.
+       */
+      predicate hasExpr() { exists(this.getExpr()) }
+
+      /**
+       * Gets the name of this format arguments argument, if it exists.
+       */
+      Name getName() { result = node.getName() }
+
+      /**
+       * Holds if `getName()` exists.
+       */
+      predicate hasName() { exists(this.getName()) }
+    }
+
     final private class ParentFormatArgsExpr extends ParentAstNode, FormatArgsExpr {
       override predicate relevantChild(AstNode child) {
         none()
+        or
+        child = this.getArg(_)
         or
         child = this.getTemplate()
       }
@@ -1030,12 +1097,14 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
       /**
        * Gets the `index`th argument of this format arguments expression (0-based).
        */
-      FormatArgsArg getArg(int index) { result = node.getArg(index) }
+      FormatArgsArgCfgNode getArg(int index) {
+        any(ChildMapping mapping).hasCfgChild(node, node.getArg(index), this, result)
+      }
 
       /**
        * Gets any of the arguments of this format arguments expression.
        */
-      FormatArgsArg getAnArg() { result = this.getArg(_) }
+      FormatArgsArgCfgNode getAnArg() { result = this.getArg(_) }
 
       /**
        * Gets the number of arguments of this format arguments expression.
@@ -2695,8 +2764,13 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
     /**
      * A `self` parameter. For example `self` in:
      * ```rust
-     * fn push(&mut self, value: T) {
-     *   // ...
+     * struct X;
+     * impl X {
+     *   fn one(&self) {}
+     *   fn two(&mut self) {}
+     *   fn three(self) {}
+     *   fn four(mut self) {}
+     *   fn five<'a>(&'a self) {}
      * }
      * ```
      */
@@ -2707,6 +2781,11 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
 
       /** Gets the underlying `SelfParam`. */
       SelfParam getSelfParam() { result = node }
+
+      /**
+       * Holds if this self parameter is reference.
+       */
+      predicate isRef() { node.isRef() }
 
       /**
        * Holds if this self parameter is mut.
@@ -3219,14 +3298,13 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
           cfgNode
         )
       or
-      pred = "getExpr" and
+      pred = "getTemplate" and
       parent =
         any(Nodes::AsmExprCfgNode cfgNode, AsmExpr astNode |
           astNode = cfgNode.getAsmExpr() and
-          child = getDesugared(astNode.getExpr()) and
-          i = -1 and
+          child = getDesugared(astNode.getTemplate(i)) and
           hasCfgNode(child) and
-          not child = cfgNode.getExpr().getAstNode()
+          not child = cfgNode.getTemplate(i).getAstNode()
         |
           cfgNode
         )
@@ -3371,6 +3449,29 @@ module MakeCfgNodes<LocationSig Loc, InputSig<Loc> Input> {
           i = -1 and
           hasCfgNode(child) and
           not child = cfgNode.getPat().getAstNode()
+        |
+          cfgNode
+        )
+      or
+      pred = "getExpr" and
+      parent =
+        any(Nodes::FormatArgsArgCfgNode cfgNode, FormatArgsArg astNode |
+          astNode = cfgNode.getFormatArgsArg() and
+          child = getDesugared(astNode.getExpr()) and
+          i = -1 and
+          hasCfgNode(child) and
+          not child = cfgNode.getExpr().getAstNode()
+        |
+          cfgNode
+        )
+      or
+      pred = "getArg" and
+      parent =
+        any(Nodes::FormatArgsExprCfgNode cfgNode, FormatArgsExpr astNode |
+          astNode = cfgNode.getFormatArgsExpr() and
+          child = getDesugared(astNode.getArg(i)) and
+          hasCfgNode(child) and
+          not child = cfgNode.getArg(i).getAstNode()
         |
           cfgNode
         )
